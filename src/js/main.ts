@@ -1,6 +1,7 @@
 import { categories } from './config/tools.js';
 import { dom, switchView, hideAlert } from './ui.js';
 import { setupToolInterface } from './handlers/toolSelectionHandler.js';
+import { loadFavorites, renderFavorites, toggleFavorite } from './logic/favorites.js';
 import { createIcons, icons } from 'lucide';
 import * as pdfjsLib from 'pdfjs-dist';
 import "../css/styles.css";
@@ -12,6 +13,7 @@ const init = () => {
     ).toString();
 
     dom.toolGrid.textContent = '';
+    loadFavorites();
 
     categories.forEach(category => {
         const categoryGroup = document.createElement('div');
@@ -26,8 +28,18 @@ const init = () => {
 
         category.tools.forEach(tool => {
             const toolCard = document.createElement('div');
-            toolCard.className = 'tool-card bg-gray-800 rounded-xl p-4 cursor-pointer flex flex-col items-center justify-center text-center';
+            toolCard.className = 'tool-card bg-gray-800 rounded-xl';
             toolCard.dataset.toolId = tool.id; 
+
+            const openToolButton = document.createElement('button');
+            openToolButton.type = 'button';
+            openToolButton.className = 'tool-open w-full h-full p-4 cursor-pointer flex flex-col items-center justify-center text-center';
+
+            const favoriteButton = document.createElement('button');
+            favoriteButton.type = 'button';
+            favoriteButton.className = 'favorite-toggle';
+            favoriteButton.dataset.favoriteToolId = tool.id;
+            favoriteButton.innerHTML = '<i data-lucide="star" class="w-5 h-5"></i>';
 
             const icon = document.createElement('i');
             icon.className = 'w-10 h-10 mb-3 text-indigo-400';
@@ -37,15 +49,16 @@ const init = () => {
             toolName.className = 'font-semibold text-white';
             toolName.textContent = tool.name; 
 
-            toolCard.append(icon, toolName);
+            openToolButton.append(icon, toolName);
 
             if (tool.subtitle) {
                 const toolSubtitle = document.createElement('p');
                 toolSubtitle.className = 'text-xs text-gray-400 mt-1 px-2';
                 toolSubtitle.textContent = tool.subtitle; 
-                toolCard.appendChild(toolSubtitle);
+                openToolButton.appendChild(toolSubtitle);
             }
 
+            toolCard.append(openToolButton, favoriteButton);
             toolsContainer.appendChild(toolCard);
         });
 
@@ -53,14 +66,17 @@ const init = () => {
         dom.toolGrid.appendChild(categoryGroup);
     });
 
-    const searchBar = document.getElementById('search-bar');
-    const categoryGroups = dom.toolGrid.querySelectorAll('.category-group');
+    const searchBar = document.getElementById('search-bar') as HTMLInputElement;
 
     searchBar.addEventListener('input', () => {
-        // @ts-expect-error TS(2339) FIXME: Property 'value' does not exist on type 'HTMLEleme... Remove this comment to see the full error message
         const searchTerm = searchBar.value.toLowerCase().trim();
 
-        categoryGroups.forEach(group => {
+        dom.toolGrid.querySelectorAll('.category-group').forEach(group => {
+            if (group.classList.contains('favorites-group') && searchTerm) {
+                group.classList.add('hidden');
+                return;
+            }
+
             const toolCards = group.querySelectorAll('.tool-card');
             let visibleToolsInCategory = 0;
 
@@ -79,9 +95,22 @@ const init = () => {
         });
     });
 
+    renderFavorites();
+    searchBar.dispatchEvent(new Event('input'));
+
     dom.toolGrid.addEventListener('click', (e) => {
-        // @ts-expect-error TS(2339) FIXME: Property 'closest' does not exist on type 'EventTa... Remove this comment to see the full error message
-        const card = e.target.closest('.tool-card');
+        const target = e.target as Element;
+        const favoriteButton = target.closest<HTMLButtonElement>('.favorite-toggle');
+        if (favoriteButton) {
+            const toolId = favoriteButton.dataset.favoriteToolId;
+            if (toolId && toggleFavorite(toolId)) {
+                renderFavorites();
+                searchBar.dispatchEvent(new Event('input'));
+            }
+            return;
+        }
+
+        const card = target.closest('.tool-open')?.closest<HTMLElement>('.tool-card');
         if (card) {
             const toolId = card.dataset.toolId;
             setupToolInterface(toolId);
